@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         CBS News
 // @description  Improve site usability. Watch videos in external player.
-// @version      1.0.0
+// @version      1.0.1
 // @match        *://cbsnews.com/live/*
 // @match        *://*.cbsnews.com/live/*
 // @match        *://cbsnews.com/video/*
 // @match        *://*.cbsnews.com/video/*
 // @icon         https://www.cbsnews.com/favicon.ico
 // @run-at       document-end
+// @grant        unsafeWindow
 // @homepage     https://github.com/warren-bank/crx-CBS-News/tree/webmonkey-userscript/es5
 // @supportURL   https://github.com/warren-bank/crx-CBS-News/issues
 // @downloadURL  https://github.com/warren-bank/crx-CBS-News/raw/webmonkey-userscript/es5/webmonkey-userscript/CBS-News.user.js
@@ -177,7 +178,7 @@ var redirect_to_url = function(url) {
     unsafeWindow.top.location = url
   }
   catch(e) {
-    unsafeWindow.location = url
+    unsafeWindow.window.location = url
   }
 }
 
@@ -274,10 +275,6 @@ var attach_event_handlers_to_listitem = function(li, channel) {
 
     process_video_url(video_url, video_type, vtt_url, referer_url)
   })
-
-  // disable native CBS scripts from preventing default 'onclick' behavior
-  unsafeWindow.isembed = true
-  window.isembed = true
 }
 
 var insert_webcast_reloaded_div_to_listitem = function(li, channel) {
@@ -287,6 +284,28 @@ var insert_webcast_reloaded_div_to_listitem = function(li, channel) {
   var referer_url   = channel.url || unsafeWindow.location.href
 
   insert_webcast_reloaded_div(block_element, video_url, vtt_url, referer_url)
+}
+
+var apply_workaround_for_native_scripts = function() {
+  var ms_interval_between_attempts = 250
+  var max_attempts                 = 120  // quit after 30 secs
+  var current_attempts             = 0
+
+  var attempt_workaround = function() {
+    current_attempts++
+    if (current_attempts > max_attempts) return
+
+    var body = unsafeWindow.document.body
+    if (body.classList.contains('no-embedded')) {
+      body.className = 'embedded'
+      unsafeWindow.window.isembed = true
+    }
+    else {
+      setTimeout(attempt_workaround, ms_interval_between_attempts)
+    }
+  }
+
+  attempt_workaround()
 }
 
 var build_dom_for_all_live_channels = function(channels) {
@@ -449,6 +468,8 @@ var build_dom_for_all_live_channels = function(channels) {
     attach_event_handlers_to_listitem(li, channel)
     insert_webcast_reloaded_div_to_listitem(li, channel)
   }
+
+  apply_workaround_for_native_scripts()
 }
 
 var download_all_live_channels = function(callback) {

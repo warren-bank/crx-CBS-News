@@ -1,0 +1,50 @@
+======
+notes:
+======
+* the following event handler is attached to all DOM elements
+* it handles 'click' (and possibly other) events
+
+=====
+code:
+=====
+function n(e) {
+    t.default.trigger("url:click", e);
+    var n = e.target;
+    if ("A" != !e.target.nodeName && (n = e.target.closest("a") || e.target.firstChild), n && "A" == n.nodeName && (!window.isembed || n.hasAttribute("data-stay-inside-embed")) && /(cbsnews\.com)/i.test(n.host) && (n.payload || n.hasAttribute("data-payload") || n.matches('a[href*="/live/"], a[href*="/video/"]') && !n.matches('a[href^="#"]'))) {
+        var r = n.payload;
+        if (!r && n.hasAttribute("data-payload") && (r = JSON.parse(n.getAttribute("data-payload"))), r)
+            if ("custom" == r.type);
+            else if ("playlist" == r.type || "listing" == r.type || "channel" == r.type) {
+            e.preventDefault();
+            var a = r.items[0];
+            r.id.indexOf("fusion") > -1 && (a = r.items[r.items.length - 1]), t.default.trigger("feed:ingested:playlist", {
+                feed: r
+            }), t.default.trigger("url:change", {
+                type: r.type,
+                playlist: r,
+                video: a,
+                userInitated: !0
+            })
+        } else e.preventDefault(), t.default.trigger("url:change", {
+            type: r.type,
+            playlist: r.playlist,
+            video: r,
+            userInitated: !0
+        });
+        else {
+            e.preventDefault();
+            var o = n.pathname;
+            "/pcs/click" == o && (o = "/video/" + n.href.split(".com/video/")[1]), s.pathClicked = o, t.default.trigger("feed:request:path", {
+                path: o,
+                targetPathname: n.pathname
+            }), i = setTimeout(function() {
+                clearTimeout(i), window.location.href = n.href
+            }, 1e3)
+        }
+    }
+}
+
+======================
+workaround to disable:
+======================
+window.isembed = true

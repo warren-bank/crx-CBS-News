@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CBS News
 // @description  Improve site usability. Watch videos in external player.
-// @version      1.0.2
+// @version      1.0.3
 // @match        *://cbsnews.com/*
 // @match        *://*.cbsnews.com/*
 // @icon         https://www.cbsnews.com/favicon.ico
@@ -22,6 +22,7 @@ var user_options = {
   "poll_window_interval_ms":        500,
   "poll_window_timeout_ms":       30000,
 
+  "emulate_webmonkey":            true,
   "add_embedded_video_links":     true,
 
   "redirect_to_webcast_reloaded": true,
@@ -562,6 +563,8 @@ var add_embedded_video_links = function() {
 // ----------------------------------------------------------------------------- bootstrap
 
 var init = function() {
+  if (user_options.emulate_webmonkey && (unsafeWindow.window !== unsafeWindow.top)) return
+
   var pathname       = unsafeWindow.location.pathname
   var is_video       = (pathname.indexOf('/video') === 0)
   var is_embed_video = (pathname.indexOf('/embed/video') === 0)

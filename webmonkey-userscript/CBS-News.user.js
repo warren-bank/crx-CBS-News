@@ -1,11 +1,9 @@
 // ==UserScript==
 // @name         CBS News
 // @description  Improve site usability. Watch videos in external player.
-// @version      1.0.1
-// @match        *://cbsnews.com/live/*
-// @match        *://*.cbsnews.com/live/*
-// @match        *://cbsnews.com/video/*
-// @match        *://*.cbsnews.com/video/*
+// @version      1.0.2
+// @match        *://cbsnews.com/*
+// @match        *://*.cbsnews.com/*
 // @icon         https://www.cbsnews.com/favicon.ico
 // @run-at       document-end
 // @grant        unsafeWindow
@@ -21,9 +19,14 @@
 // ----------------------------------------------------------------------------- constants
 
 var user_options = {
-  "redirect_to_webcast_reloaded":  true,
-  "force_http":                    true,
-  "force_https":                   false
+  "poll_window_interval_ms":        500,
+  "poll_window_timeout_ms":       30000,
+
+  "add_embedded_video_links":     true,
+
+  "redirect_to_webcast_reloaded": true,
+  "force_http":                   true,
+  "force_https":                  false
 }
 
 var strings = {
@@ -91,6 +94,31 @@ var make_element = function(elementName, html) {
     el.innerHTML = html
 
   return el
+}
+
+// ----------------------------------------------------------------------------- retry until success or timeout occurs
+
+var max_poll_window_attempts = Math.ceil(user_options.poll_window_timeout_ms / user_options.poll_window_interval_ms)
+
+var poll_window = function(process_window, process_timeout, count_poll_window_attempts) {
+  if (!count_poll_window_attempts)
+    count_poll_window_attempts = 0
+
+  count_poll_window_attempts++
+
+  if (count_poll_window_attempts <= max_poll_window_attempts) {
+    if (!process_window()) {
+      unsafeWindow.setTimeout(
+        function() {
+          poll_window(process_window, process_timeout, count_poll_window_attempts)
+        },
+        user_options.poll_window_interval_ms
+      )
+    }
+  }
+  else if ('function' === (typeof process_timeout)) {
+    process_timeout()
+  }
 }
 
 // ----------------------------------------------------------------------------- URL links to tools on Webcast Reloaded website
@@ -511,20 +539,43 @@ var display_all_live_channels = function() {
   download_all_live_channels(build_dom_for_all_live_channels)
 }
 
+// -----------------------------------------------------------------------------
+
+var add_embedded_video_links = function() {
+  var iframes = unsafeWindow.document.querySelectorAll('iframe[data-src^="https://www.cbsnews.com/embed/video/"]')
+  var iframe, url, title, anchor
+  for (var i=0; i < iframes.length; i++) {
+    iframe = iframes[i]
+    url    = iframe.getAttribute('data-src')
+    title  = iframe.getAttribute('title') || 'Embedded Video'
+    anchor = make_element('a')
+
+    anchor.setAttribute('target', '_blank')
+    anchor.setAttribute('href', url)
+    anchor.innerHTML = title
+
+    iframe.parentNode.insertBefore(anchor, iframe)
+    iframe.style.display = 'none'
+  }
+}
+
 // ----------------------------------------------------------------------------- bootstrap
 
 var init = function() {
-  var pathname      = unsafeWindow.location.pathname
-  var is_video      = (pathname.indexOf('/video') === 0)
-  var is_live       = (pathname.indexOf('/live')  === 0)
-  var is_live_video = (is_live && (pathname.length > 6))  // '^/live/.+$'
+  var pathname       = unsafeWindow.location.pathname
+  var is_video       = (pathname.indexOf('/video') === 0)
+  var is_embed_video = (pathname.indexOf('/embed/video') === 0)
+  var is_live        = (pathname.indexOf('/live')  === 0)
+  var is_live_video  = (is_live && (pathname.length > 6))  // '^/live/.+$'
 
-  if (is_video)
-    process_video()
+  if (is_video || is_embed_video)
+    poll_window(process_video)
   else if (is_live_video)
-    process_video() || display_all_live_channels()
+    poll_window(process_video, display_all_live_channels)
   else if (is_live)
     display_all_live_channels()
+  else if (user_options.add_embedded_video_links)
+    add_embedded_video_links()
 }
 
 init()

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CBS News
 // @description  Improve site usability. Watch videos in external player.
-// @version      1.0.3
+// @version      1.0.4
 // @match        *://cbsnews.com/*
 // @match        *://*.cbsnews.com/*
 // @icon         https://www.cbsnews.com/favicon.ico
@@ -19,15 +19,21 @@
 // ----------------------------------------------------------------------------- constants
 
 var user_options = {
-  "poll_window_interval_ms":        500,
-  "poll_window_timeout_ms":       30000,
+  "common": {
+    "poll_window_interval_ms":        500,
+    "poll_window_timeout_ms":       30000,
 
-  "emulate_webmonkey":            true,
-  "add_embedded_video_links":     true,
-
-  "redirect_to_webcast_reloaded": true,
-  "force_http":                   true,
-  "force_https":                  false
+    "emulate_webmonkey":            true,
+    "add_embedded_video_links":     true
+  },
+  "webmonkey": {
+    "post_intent_redirect_to_url":  "about:blank"
+  },
+  "greasemonkey": {
+    "redirect_to_webcast_reloaded": true,
+    "force_http":                   true,
+    "force_https":                  false
+  }
 }
 
 var strings = {
@@ -99,7 +105,7 @@ var make_element = function(elementName, html) {
 
 // ----------------------------------------------------------------------------- retry until success or timeout occurs
 
-var max_poll_window_attempts = Math.ceil(user_options.poll_window_timeout_ms / user_options.poll_window_interval_ms)
+var max_poll_window_attempts = Math.ceil(user_options.common.poll_window_timeout_ms / user_options.common.poll_window_interval_ms)
 
 var poll_window = function(process_window, process_timeout, count_poll_window_attempts) {
   if (!count_poll_window_attempts)
@@ -113,7 +119,7 @@ var poll_window = function(process_window, process_timeout, count_poll_window_at
         function() {
           poll_window(process_window, process_timeout, count_poll_window_attempts)
         },
-        user_options.poll_window_interval_ms
+        user_options.common.poll_window_interval_ms
       )
     }
   }
@@ -125,8 +131,8 @@ var poll_window = function(process_window, process_timeout, count_poll_window_at
 // ----------------------------------------------------------------------------- URL links to tools on Webcast Reloaded website
 
 var get_webcast_reloaded_url = function(video_url, vtt_url, referer_url, force_http, force_https) {
-  force_http  = (typeof force_http  === 'boolean') ? force_http  : user_options.force_http
-  force_https = (typeof force_https === 'boolean') ? force_https : user_options.force_https
+  force_http  = (typeof force_http  === 'boolean') ? force_http  : user_options.greasemonkey.force_http
+  force_https = (typeof force_https === 'boolean') ? force_https : user_options.greasemonkey.force_https
 
   var encoded_video_url, encoded_vtt_url, encoded_referer_url, webcast_reloaded_base, webcast_reloaded_url
 
@@ -203,12 +209,33 @@ var insert_webcast_reloaded_div = function(block_element, video_url, vtt_url, re
 var redirect_to_url = function(url) {
   if (!url) return
 
-  try {
-    unsafeWindow.top.location = url
+  if (typeof GM_loadUrl === 'function') {
+    if (typeof GM_resolveUrl === 'function')
+      url = GM_resolveUrl(url, unsafeWindow.location.href) || url
+
+    GM_loadUrl(url, 'Referer', unsafeWindow.location.href)
   }
-  catch(e) {
-    unsafeWindow.window.location = url
+  else {
+    try {
+      unsafeWindow.top.location = url
+    }
+    catch(e) {
+      unsafeWindow.window.location = url
+    }
   }
+}
+
+var process_webmonkey_post_intent_redirect_to_url = function() {
+  var url = null
+
+  if (typeof user_options.webmonkey.post_intent_redirect_to_url === 'string')
+    url = user_options.webmonkey.post_intent_redirect_to_url
+
+  if (typeof user_options.webmonkey.post_intent_redirect_to_url === 'function')
+    url = user_options.webmonkey.post_intent_redirect_to_url()
+
+  if (typeof url === 'string')
+    redirect_to_url(url)
 }
 
 var process_video_url = function(video_url, video_type, vtt_url, referer_url) {
@@ -235,9 +262,10 @@ var process_video_url = function(video_url, video_type, vtt_url, referer_url) {
     }
 
     GM_startIntent.apply(this, args)
+    process_webmonkey_post_intent_redirect_to_url()
     return true
   }
-  else if (user_options.redirect_to_webcast_reloaded) {
+  else if (user_options.greasemonkey.redirect_to_webcast_reloaded) {
     // running in standard web browser: redirect URL to top-level tool on Webcast Reloaded website
 
     redirect_to_url(get_webcast_reloaded_url(video_url, vtt_url, referer_url))
@@ -537,6 +565,8 @@ var download_all_live_channels = function(callback) {
 }
 
 var display_all_live_channels = function() {
+  user_options.webmonkey.post_intent_redirect_to_url = null
+
   download_all_live_channels(build_dom_for_all_live_channels)
 }
 
@@ -563,7 +593,7 @@ var add_embedded_video_links = function() {
 // ----------------------------------------------------------------------------- bootstrap
 
 var init = function() {
-  if (user_options.emulate_webmonkey && (unsafeWindow.window !== unsafeWindow.top)) return
+  if (user_options.common.emulate_webmonkey && (unsafeWindow.window !== unsafeWindow.top)) return
 
   var pathname       = unsafeWindow.location.pathname
   var is_video       = (pathname.indexOf('/video') === 0)
@@ -577,7 +607,7 @@ var init = function() {
     poll_window(process_video, display_all_live_channels)
   else if (is_live)
     display_all_live_channels()
-  else if (user_options.add_embedded_video_links)
+  else if (user_options.common.add_embedded_video_links)
     add_embedded_video_links()
 }
 
